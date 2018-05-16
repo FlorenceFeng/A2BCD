@@ -1,2 +1,2 @@
 # A2BCD
-Code for the numerical test in the paper
+yv_ATA is the code for numerical tests in paper.
