@@ -15,18 +15,20 @@
 #include <iostream>
 using namespace std;
 
-extern pthread_mutex_t serverlock;
-extern pthread_mutex_t workerlock;
+extern pthread_mutex_t readlock;
+extern pthread_mutex_t writelock;
+extern pthread_barrier_t barrier;
 
 class BCD{
 	private:
-		vector<double> bg;
+		vector<double> bg;//block_grad
+		vector<double> A_grad;
 		vector<double> p_local;
 		vector<double> q_local;
 		vector<double> Ap_local;
 		vector<double> Aq_local;
 		vector<double> B_local;
-		Update* update;
+		//Update* update;
 		gsl_vector* y;
 		gsl_vector* v;
 		gsl_vector* x;
@@ -35,6 +37,9 @@ class BCD{
 		double p1;
 		double p2; 
 		double p3;
+		double c1;
+		double c2;
+		double det;
 		
 	public: 
 		Params *params;
@@ -43,7 +48,7 @@ class BCD{
 		gsl_vector* Ap;
 		gsl_vector* Aq;
 		gsl_matrix* B; 
-		std::queue<Update*> *Q;
+		//std::queue<Update*> *Q;
 		gsl_spmatrix* F;
 		std::vector<gsl_spmatrix*> *F_trans_block;
 		gsl_vector* l;
@@ -58,7 +63,7 @@ class BCD{
 			Ap = Ap_;
 			Aq = Aq_;
 			B = B_;
-			Q = Q_;
+			//Q = Q_;
 			F = F_;
 			F_trans_block = F_trans_block_;
 			l = l_;
@@ -69,7 +74,7 @@ class BCD{
 			p_local.resize(params->F_block_size);
 			q_local.resize(params->F_block_size);
 			bg.resize(params->F_block_size);
-			
+			A_grad.resize(params->m);
 			Ap_local.resize(params->m);
 			Aq_local.resize(params->m);
 			B_local.resize(4);
@@ -83,183 +88,73 @@ class BCD{
 			p3 = p2/2.;
 	    }
 
-		bool worker(int id, int rd){
-			double c1 = 0.;
-			double c2 = 0.;
-			gsl_vector_view grad;
-			gsl_vector_view A_grad;
-			gsl_vector_view pp;
-			gsl_vector_view qq;
-			gsl_vector_view gsl_Ap_l;
-			gsl_vector_view gsl_Aq_l;
-			gsl_vector_view gsl_p;
-			gsl_vector_view gsl_q;
-			gsl_vector_view gsl_l;
-			gsl_vector_view gsl_p_l;
-			gsl_vector_view gsl_q_l;
-			gsl_vector_view gsl_bg;
-			gsl_vector_view gsl_A_grad;
-
-
-			// server job before communicating shared-memory
-			if(id){
-
-				/*if(Q->empty()){
-					return false;
-				}
-				update = Q->front();*/
-				//cout<<Q->size()<<endl;
-				B_local[0] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 0) + params->alpha*params->beta*gsl_matrix_get(B, 1, 0);
-				B_local[1] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 1) + params->alpha*params->beta*gsl_matrix_get(B, 1, 1);
-				B_local[2] = (1-params->beta) * gsl_matrix_get(B, 0, 0) + params->beta*gsl_matrix_get(B, 1, 0);
-				B_local[3] = (1-params->beta) * gsl_matrix_get(B, 0, 1) + params->beta*gsl_matrix_get(B, 1, 1);
-				double det = B_local[0] * B_local[3] - B_local[1] * B_local[2];
-				c1 = -params->stepsize[0]*B_local[3]/det + params->stepsize[1]*B_local[1]/det;
-				c2 = params->stepsize[0]*B_local[2]/det - params->stepsize[1]*B_local[0]/det;
-				grad = gsl_vector_view_array (&(update->block_grad[0]), update->info.b_size);
-				A_grad = gsl_vector_view_array (&(update->A_grad[0]), params->m);
-				pp = gsl_vector_subvector (p, update->info.pos, update->info.b_size);
-				qq = gsl_vector_subvector (q, update->info.pos, update->info.b_size);
-			}
-
-			// worker's job before communicating shared-memory
-			if(id){
-				// randomly pick a block
-				info.reset((int)gsl_vector_get(r, rd)%params->block_num, *params);
-				
-				// new an update instance
-				update = new Update();
-				update->info = info;
-				update->block_grad.resize(info.b_size);
-				update->A_grad.resize(params->m);
-				
-				gsl_Ap_l = gsl_vector_view_array (&Ap_local[0], params->m);
-				gsl_Aq_l = gsl_vector_view_array (&Aq_local[0], params->m);
-				gsl_p = gsl_vector_subvector(p, info.F_start, info.F_size);
-				gsl_q = gsl_vector_subvector(q, info.F_start, info.F_size);
-				gsl_l = gsl_vector_subvector (l, info.F_start, info.F_size);
-				gsl_p_l = gsl_vector_view_array (&p_local[0], info.F_size);
-				gsl_q_l = gsl_vector_view_array (&q_local[0], info.F_size);
-				gsl_bg = gsl_vector_view_array (&bg[0], info.F_size);
-				gsl_A_grad = gsl_vector_view_array (&update->A_grad[0], params->m);
-			}
-
-
-			// server-write worker-read mutex
-			pthread_mutex_lock(&serverlock);
+		bool worker(int rd){
 			
-			// server
-			if(!id){
-				// update p, q, Ap, Aq, B
-				gsl_blas_daxpy (c1, &grad.vector, &pp.vector);
-				gsl_blas_daxpy (c2, &grad.vector, &qq.vector);
-				gsl_blas_daxpy (c1, &A_grad.vector, Ap);
-				gsl_blas_daxpy (c2, &A_grad.vector, Aq);
+			info.reset((int)gsl_vector_get(r, rd)%params->block_num, *params);
 				
-				gsl_matrix_set (B, 0, 0, B_local[0]);
-				gsl_matrix_set (B, 0, 1, B_local[1]);
-				gsl_matrix_set (B, 1, 0, B_local[2]);
-				gsl_matrix_set (B, 1, 1, B_local[3]);
-			}
-
-			// worker
-			if(id){
-				// copy p,q,Ap,Aq,B from shared memory
-				gsl_blas_dcopy (Ap, &gsl_Ap_l.vector);
-				gsl_blas_dcopy (Aq, &gsl_Aq_l.vector);
-				gsl_blas_dcopy (&gsl_p.vector, &gsl_p_l.vector);
-				gsl_blas_dcopy (&gsl_q.vector, &gsl_q_l.vector);
-				B_local[0] = gsl_matrix_get(B, 0, 0);
-				B_local[1] = gsl_matrix_get(B, 0, 1);
-			}
-
-			pthread_mutex_unlock(&serverlock);
+			gsl_vector_view gsl_Ap_l = gsl_vector_view_array (&Ap_local[0], params->m);
+			gsl_vector_view gsl_Aq_l = gsl_vector_view_array (&Aq_local[0], params->m);
+			gsl_vector_view gsl_p = gsl_vector_subvector(p, info.F_start, info.F_size);
+			gsl_vector_view gsl_q = gsl_vector_subvector(q, info.F_start, info.F_size);
+			gsl_vector_view gsl_l = gsl_vector_subvector (l, info.F_start, info.F_size);
+			gsl_vector_view gsl_p_l = gsl_vector_view_array (&p_local[0], info.F_size);
+			gsl_vector_view gsl_q_l = gsl_vector_view_array (&q_local[0], info.F_size);
+			gsl_vector_view gsl_bg = gsl_vector_view_array (&bg[0], info.F_size);
+			gsl_vector_view gsl_A_grad = gsl_vector_view_array (&A_grad[0], params->m);
 			
-			if(!id){
-				Q->pop();
-				if(update != NULL)
-					delete update;
-			}
-
-			if(id){
-				// calculate block_grad of ridge regression
-				gsl_blas_dscal (B_local[0]*p1, &gsl_Ap_l.vector);
-				gsl_blas_daxpy (B_local[1]*p1, &gsl_Aq_l.vector, &gsl_Ap_l.vector);
-				gsl_spblas_dgemv (CblasNoTrans, 1, F_trans_block->at(info.F_id), &gsl_Ap_l.vector, 0.,  &gsl_bg.vector);
-				gsl_blas_daxpy (B_local[0]*p2, &gsl_p_l.vector, &gsl_bg.vector);
-				gsl_blas_daxpy (B_local[1]*p2, &gsl_q_l.vector, &gsl_bg.vector);
-				gsl_blas_daxpy (p3, &gsl_l.vector, &gsl_bg.vector);
-				
-				int i = 0;
-				while(i < info.b_start_F){
-					gsl_vector_set(&gsl_bg.vector, i, 0.);
-					i++;
-				}
-				while(i < info.b_start_F + info.b_size){
-					update->block_grad[i-info.b_start_F] = gsl_vector_get(&gsl_bg.vector, i);
-					i++;
-				}
-				while(i < info.F_size){
-					gsl_vector_set(&gsl_bg.vector, i, 0.);
-					i++;
-				}
-				
-				// calculate A_grad
-				gsl_spblas_dgemv (CblasTrans, 1., F_trans_block->at(info.F_id), &gsl_bg.vector, 0., &gsl_A_grad.vector);
-
-				// push to queue;
-				pthread_mutex_lock(&workerlock);
-				Q->push(update);
-				pthread_mutex_unlock(&workerlock);
-				
-				// clear bg
-				std::fill(bg.begin(), bg.end(), 0);
-			}
-
-			return true;
-		}
-		
-		bool server(){
-			if(Q->empty()){
-				return false;
-			}
-			update = Q->front();
+			// read from shared memory
+			// async uses lock; sync uses barrier
+			pthread_mutex_lock(&readlock);
+			gsl_blas_dcopy (Ap, &gsl_Ap_l.vector);
+			gsl_blas_dcopy (Aq, &gsl_Aq_l.vector);
+			gsl_blas_dcopy (&gsl_p.vector, &gsl_p_l.vector);
+			gsl_blas_dcopy (&gsl_q.vector, &gsl_q_l.vector);
+			B_local[0] = gsl_matrix_get(B, 0, 0);
+			B_local[1] = gsl_matrix_get(B, 0, 1);
+			pthread_mutex_unlock(&readlock);
+			//pthread_barrier_wait(&barrier);
 			
+			// calculate block_grad of ridge regression
+			gsl_blas_dscal (B_local[0]*p1, &gsl_Ap_l.vector);
+			gsl_blas_daxpy (B_local[1]*p1, &gsl_Aq_l.vector, &gsl_Ap_l.vector);
+			gsl_spblas_dgemv (CblasNoTrans, 1, F_trans_block->at(info.F_id), &gsl_Ap_l.vector, 0.,  &gsl_bg.vector);
+			gsl_blas_daxpy (B_local[0]*p2, &gsl_p_l.vector, &gsl_bg.vector);
+			gsl_blas_daxpy (B_local[1]*p2, &gsl_q_l.vector, &gsl_bg.vector);
+			gsl_blas_daxpy (p3, &gsl_l.vector, &gsl_bg.vector);
+			// calculate A_grad
+			gsl_spblas_dgemv (CblasTrans, 1., F_trans_block->at(info.F_id), &gsl_bg.vector, 0., &gsl_A_grad.vector);
+
+			// write to shared memory
+			pthread_mutex_lock(&writelock);
 			B_local[0] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 0) + params->alpha*params->beta*gsl_matrix_get(B, 1, 0);
 			B_local[1] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 1) + params->alpha*params->beta*gsl_matrix_get(B, 1, 1);
 			B_local[2] = (1-params->beta) * gsl_matrix_get(B, 0, 0) + params->beta*gsl_matrix_get(B, 1, 0);
 			B_local[3] = (1-params->beta) * gsl_matrix_get(B, 0, 1) + params->beta*gsl_matrix_get(B, 1, 1);
-			double det = B_local[0] * B_local[3] - B_local[1] * B_local[2];
-			double c1 = -params->stepsize[0]*B_local[3]/det + params->stepsize[1]*B_local[1]/det;
-			double c2 = params->stepsize[0]*B_local[2]/det - params->stepsize[1]*B_local[0]/det;
+			det = B_local[0] * B_local[3] - B_local[1] * B_local[2];
+			c1 = -params->stepsize[0]*B_local[3]/det + params->stepsize[1]*B_local[1]/det;
+			c2 = params->stepsize[0]*B_local[2]/det - params->stepsize[1]*B_local[0]/det;
+			gsl_vector_view pp = gsl_vector_subvector (p, info.pos, info.b_size);
+			gsl_vector_view qq = gsl_vector_subvector (q, info.pos, info.b_size);
 			
-			gsl_vector_view grad = gsl_vector_view_array (&(update->block_grad[0]), update->info.b_size);
-			gsl_vector_view A_grad = gsl_vector_view_array (&(update->A_grad[0]), params->m);
-			gsl_vector_view pp = gsl_vector_subvector (p, update->info.pos, update->info.b_size);
-			gsl_vector_view qq = gsl_vector_subvector (q, update->info.pos, update->info.b_size);
-			
-			// write to shared memory
-			gsl_blas_daxpy (c1, &grad.vector, &pp.vector);
-			gsl_blas_daxpy (c2, &grad.vector, &qq.vector);
-			gsl_blas_daxpy (c1, &A_grad.vector, Ap);
-			gsl_blas_daxpy (c2, &A_grad.vector, Aq);
+			gsl_blas_daxpy (c1, &gsl_bg.vector, &pp.vector);
+			gsl_blas_daxpy (c2, &gsl_bg.vector, &qq.vector);
+			gsl_blas_daxpy (c1, &gsl_A_grad.vector, Ap);
+			gsl_blas_daxpy (c2, &gsl_A_grad.vector, Aq);
 			
 			gsl_matrix_set (B, 0, 0, B_local[0]);
 			gsl_matrix_set (B, 0, 1, B_local[1]);
 			gsl_matrix_set (B, 1, 0, B_local[2]);
 			gsl_matrix_set (B, 1, 1, B_local[3]);
-			
-			Q->pop();
-			if(update != NULL)
-				delete update;
+			pthread_mutex_unlock(&writelock);
+
 			return true;
 		}
 		
 		void error_check(int iter){
 			
 			params->times.push_back(get_wall_time() - params->time);
-			if(iter % params->update_step == 0){
-				// recover y from p, q
+			if(iter > params->update_step){
+				// recover y,v from p, q
 				gsl_blas_dscal (0, y);
 				gsl_blas_daxpy (gsl_matrix_get(B, 0, 0), p, y);
 				gsl_blas_daxpy (gsl_matrix_get(B, 0, 1), q, y);
@@ -268,29 +163,22 @@ class BCD{
 				gsl_blas_daxpy (gsl_matrix_get(B, 1, 1), q, v);
 				gsl_blas_dcopy (y, p);
 				gsl_blas_dcopy (v, q);
-				
-				// clear queue
-				std::queue<Update*> newQ;
-				std::swap(*Q, newQ);
-				
+				// update Ap, Aq
+				gsl_spblas_dgemv (CblasNoTrans, 1., F, p, 0.,Ap);
+				gsl_spblas_dgemv (CblasNoTrans, 1., F, q, 0.,Aq);
+				// rescale B
 				gsl_matrix_set (B, 0, 0, 1);
 				gsl_matrix_set (B, 0, 1, 0);
 				gsl_matrix_set (B, 1, 0, 0);
 				gsl_matrix_set (B, 1, 1, 1);
-				gsl_spblas_dgemv (CblasNoTrans, 1., F, p, 0.,Ap);
-				gsl_spblas_dgemv (CblasNoTrans, 1., F, q, 0.,Aq);
+				params->update_step += params->update_step;
 			}
-			
-			
 			
 			// recover y from p, q
 			gsl_blas_dscal (0, y);
 			gsl_blas_daxpy (gsl_matrix_get(B, 0, 0), p, y);
 			gsl_blas_daxpy (gsl_matrix_get(B, 0, 1), q, y);
-			/*gsl_blas_dscal (0, v);
-			gsl_blas_daxpy (gsl_matrix_get(B, 1, 0), p, v);
-			gsl_blas_daxpy (gsl_matrix_get(B, 1, 1), q, v);*/
-
+			
 			// recover x from y
 			gsl_spblas_dgemv (CblasNoTrans, 1., F, y, 0.,temp);
 			gsl_spblas_dgemv (CblasTrans, 1., F, temp, 0., x);
@@ -298,11 +186,14 @@ class BCD{
 			gsl_blas_daxpy (1-params->h * p2 / params->lip, y, x);
 			gsl_blas_daxpy (-params->h * p3 / params->lip, l, x);
 			
+			// calculate sub-optimality
 			double dot = 0;
 			gsl_blas_ddot(x,l, &dot);
 			gsl_spblas_dgemv (CblasNoTrans, 1., F, x, 0., temp);
 			double value = 0.5 *p1*pow(gsl_blas_dnrm2(temp),2)+ p3 * pow(gsl_blas_dnrm2 (x),2) + p3 * dot;
 			
+			if(fabs(value-params->optimal) < params->tol)
+				params->stop = 1;
 			params->error.push_back(fabs(value-params->optimal));
 			params->time = get_wall_time();
 			//std::cout.precision(10);
