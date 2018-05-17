@@ -1,4 +1,4 @@
-# Makefile for ASYNC-RBCD
+	# Makefile for ASYNC-RBCD
 
 CC := g++ # This is the main compiler
 # CC := clang --analyze # and comment out the linker last line for sanity
@@ -38,7 +38,7 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
 	@echo " $(CC) $(CFLAGS) $(INC) -c -o $@ $<"; $(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 run:
-	./$(ARBCD) -m 300 -n 14951 -nthread 9 -block_size 1000 -F_block_size 1000 -max_itrs 200000 -check_step 14000 -lambda 1 -psi 0 -optimal -0.07875005 -eigen 39474
+	./$(ARBCD) -m 47236 -n 677399 -nthread 40 -style 2 -block_size 1000 -F_block_size 1000 -max_itrs 20000 -check_step 1000 -update_step 1000 -lambda 1 -psi 0 -optimal 0 -eigen 40000
 # clean up the executables and objective fils
 ##############################################
 clean:

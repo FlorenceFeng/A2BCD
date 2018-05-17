@@ -15,7 +15,6 @@
 #include <iostream>
 using namespace std;
 
-extern pthread_mutex_t readlock;
 extern pthread_mutex_t writelock;
 extern pthread_barrier_t barrier;
 
@@ -48,7 +47,6 @@ class BCD{
 		gsl_vector* Ap;
 		gsl_vector* Aq;
 		gsl_matrix* B; 
-		//std::queue<Update*> *Q;
 		gsl_spmatrix* F;
 		std::vector<gsl_spmatrix*> *F_trans_block;
 		gsl_vector* l;
@@ -63,7 +61,6 @@ class BCD{
 			Ap = Ap_;
 			Aq = Aq_;
 			B = B_;
-			//Q = Q_;
 			F = F_;
 			F_trans_block = F_trans_block_;
 			l = l_;
@@ -88,7 +85,7 @@ class BCD{
 			p3 = p2/2.;
 	    }
 
-		bool worker(int rd){
+		void worker(int rd){
 			
 			info.reset((int)gsl_vector_get(r, rd)%params->block_num, *params);
 				
@@ -103,16 +100,16 @@ class BCD{
 			gsl_vector_view gsl_A_grad = gsl_vector_view_array (&A_grad[0], params->m);
 			
 			// read from shared memory
-			// async uses lock; sync uses barrier
-			pthread_mutex_lock(&readlock);
 			gsl_blas_dcopy (Ap, &gsl_Ap_l.vector);
 			gsl_blas_dcopy (Aq, &gsl_Aq_l.vector);
 			gsl_blas_dcopy (&gsl_p.vector, &gsl_p_l.vector);
 			gsl_blas_dcopy (&gsl_q.vector, &gsl_q_l.vector);
 			B_local[0] = gsl_matrix_get(B, 0, 0);
 			B_local[1] = gsl_matrix_get(B, 0, 1);
-			pthread_mutex_unlock(&readlock);
-			//pthread_barrier_wait(&barrier);
+			
+			// synchronous 
+			if(params->style == 2)
+			    pthread_barrier_wait(&barrier);
 			
 			// calculate block_grad of ridge regression
 			gsl_blas_dscal (B_local[0]*p1, &gsl_Ap_l.vector);
@@ -146,58 +143,58 @@ class BCD{
 			gsl_matrix_set (B, 1, 0, B_local[2]);
 			gsl_matrix_set (B, 1, 1, B_local[3]);
 			pthread_mutex_unlock(&writelock);
-
-			return true;
 		}
 		
 		void error_check(int iter){
 			
 			params->times.push_back(get_wall_time() - params->time);
-			if(iter > params->update_step){
-				// recover y,v from p, q
-				gsl_blas_dscal (0, y);
-				gsl_blas_daxpy (gsl_matrix_get(B, 0, 0), p, y);
-				gsl_blas_daxpy (gsl_matrix_get(B, 0, 1), q, y);
-				gsl_blas_dscal (0, v);
-				gsl_blas_daxpy (gsl_matrix_get(B, 1, 0), p, v);
-				gsl_blas_daxpy (gsl_matrix_get(B, 1, 1), q, v);
-				gsl_blas_dcopy (y, p);
-				gsl_blas_dcopy (v, q);
-				// update Ap, Aq
-				gsl_spblas_dgemv (CblasNoTrans, 1., F, p, 0.,Ap);
-				gsl_spblas_dgemv (CblasNoTrans, 1., F, q, 0.,Aq);
-				// rescale B
-				gsl_matrix_set (B, 0, 0, 1);
-				gsl_matrix_set (B, 0, 1, 0);
-				gsl_matrix_set (B, 1, 0, 0);
-				gsl_matrix_set (B, 1, 1, 1);
-				params->update_step += params->update_step;
-			}
-			
-			// recover y from p, q
+
+			// recover y,v from p, q
 			gsl_blas_dscal (0, y);
 			gsl_blas_daxpy (gsl_matrix_get(B, 0, 0), p, y);
 			gsl_blas_daxpy (gsl_matrix_get(B, 0, 1), q, y);
+			gsl_blas_dscal (0, v);
+			gsl_blas_daxpy (gsl_matrix_get(B, 1, 0), p, v);
+			gsl_blas_daxpy (gsl_matrix_get(B, 1, 1), q, v);
+			gsl_blas_dcopy (y, p);
+			gsl_blas_dcopy (v, q);
+			// update Ap, Aq
+			gsl_spblas_dgemv (CblasNoTrans, 1., F, p, 0.,Ap);
+			gsl_spblas_dgemv (CblasNoTrans, 1., F, q, 0.,Aq);
+			// rescale B
+			gsl_matrix_set (B, 0, 0, 1);
+			gsl_matrix_set (B, 0, 1, 0);
+			gsl_matrix_set (B, 1, 0, 0);
+			gsl_matrix_set (B, 1, 1, 1);
+						
+			if(iter >= params->check_thresh){
 			
-			// recover x from y
-			gsl_spblas_dgemv (CblasNoTrans, 1., F, y, 0.,temp);
-			gsl_spblas_dgemv (CblasTrans, 1., F, temp, 0., x);
-			gsl_blas_dscal (-params->h * p1/ params->lip, x);
-			gsl_blas_daxpy (1-params->h * p2 / params->lip, y, x);
-			gsl_blas_daxpy (-params->h * p3 / params->lip, l, x);
-			
-			// calculate sub-optimality
-			double dot = 0;
-			gsl_blas_ddot(x,l, &dot);
-			gsl_spblas_dgemv (CblasNoTrans, 1., F, x, 0., temp);
-			double value = 0.5 *p1*pow(gsl_blas_dnrm2(temp),2)+ p3 * pow(gsl_blas_dnrm2 (x),2) + p3 * dot;
-			
-			if(fabs(value-params->optimal) < params->tol)
-				params->stop = 1;
-			params->error.push_back(fabs(value-params->optimal));
-			params->time = get_wall_time();
-			//std::cout.precision(10);
-			cout<<fabs(value-params->optimal)<< endl;
+				// recover y from p, q
+				gsl_blas_dscal (0, y);
+				gsl_blas_daxpy (gsl_matrix_get(B, 0, 0), p, y);
+				gsl_blas_daxpy (gsl_matrix_get(B, 0, 1), q, y);
+				
+				// recover x from y
+				gsl_spblas_dgemv (CblasNoTrans, 1., F, y, 0.,temp);
+				gsl_spblas_dgemv (CblasTrans, 1., F, temp, 0., x);
+				gsl_blas_dscal (-params->h * p1/ params->lip, x);
+				gsl_blas_daxpy (1-params->h * p2 / params->lip, y, x);
+				gsl_blas_daxpy (-params->h * p3 / params->lip, l, x);
+				
+				// calculate sub-optimality
+				double dot = 0;
+				gsl_blas_ddot(x,l, &dot);
+				gsl_spblas_dgemv (CblasNoTrans, 1., F, x, 0., temp);
+				double value = 0.5 *p1*pow(gsl_blas_dnrm2(temp),2)+ p3 * pow(gsl_blas_dnrm2 (x),2) + p3 * dot;
+				
+				if(fabs(value-params->optimal) < params->tol)
+					params->stop = 1;
+				params->error.push_back(fabs(value-params->optimal));
+				params->time = get_wall_time();
+				//std::cout.precision(10);
+				cout<<fabs(value-params->optimal)<< endl;
+				params->check_thresh += params->check_step;
+			}
 		}
 };
 

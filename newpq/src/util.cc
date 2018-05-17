@@ -15,6 +15,10 @@ void set_parameter(Params &params){
 	double S_half = params.block_num * sqrt(params.lip);
 	params.alpha = 1./(1+(1+params.psi)*S_half*(1./sqrt(params.sigma)));
 	params.beta = 1-(1-params.psi)*sqrt(params.sigma)*(1./S_half);
+	if(params.style == 3){
+		params.alpha = 0;
+		params.beta = 1;
+	}
 	params.h = 1-0.5*sqrt(params.sigma)/sqrt(params.lip)*params.psi;
 	// set stepsize
 	params.stepsize[0] = (params.alpha * (1./sqrt(params.sigma)) * (1./sqrt(params.lip))

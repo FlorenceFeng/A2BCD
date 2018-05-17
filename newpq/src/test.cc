@@ -16,7 +16,6 @@ using namespace std;
 
 std::atomic<int> iter(0); // global iteration counter
 std::atomic<int> rd(0);
-pthread_mutex_t readlock;
 pthread_mutex_t writelock;
 pthread_barrier_t barrier; 
 pthread_barrierattr_t attr;
@@ -29,13 +28,13 @@ int main(int argc, char *argv[]) {
 	
 	// load label vector
 	gsl_vector* l = gsl_vector_calloc(params.n); 
-	FILE *fl = fopen("rcv1_train/rcv1_train_l.dat", "r");
+	FILE *fl = fopen("rcv1_test/rcv1_test_l.dat", "r");
 	gsl_vector_fscanf(fl, l); 
 	fclose(fl);
 	
 	// load feature matrix : MatrixMarket format
 	gsl_spmatrix* F = gsl_spmatrix_alloc(params.m, params.n); 
-	FILE *fF = fopen("rcv1_train/rcv1_train_A", "r"); 
+	FILE *fF = fopen("rcv1_test/rcv1_test_A", "r"); 
 	F = gsl_spmatrix_fscanf(fF);
 	fclose(fF);
 	
@@ -44,7 +43,7 @@ int main(int argc, char *argv[]) {
 	for(int i = 0 ; i < params.F_block_num; i++){
 		int size = i < params.block_num - 1 ? params.F_block_size : params.n % params.F_block_num;
 		F_trans_block.push_back(gsl_spmatrix_alloc(params.F_block_size, params.m));
-	    std::string name = "rcv1_train/" + std::to_string(static_cast<long long>(params.F_block_num)) + "blocks/rcv1_train_block_" + std::to_string(static_cast<long long>(i+1));
+	    std::string name = "rcv1_test/" + std::to_string(static_cast<long long>(params.F_block_num)) + "blocks/rcv1_test_block_" + std::to_string(static_cast<long long>(i+1));
 		FILE *fF_trans_block = fopen(name.c_str(), "r");   //MatrixMarket format
 		F_trans_block[i] = gsl_spmatrix_fscanf(fF_trans_block);
 		fclose(fF_trans_block);

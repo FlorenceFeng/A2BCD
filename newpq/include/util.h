@@ -22,7 +22,8 @@ struct Params {
 	double eigen;
 	double tol;
 	int style;
-	int thresh;
+	int update_thresh;
+	int check_thresh;
 	double time;
 	int block_num;
 	int F_block_num;
@@ -77,9 +78,6 @@ class Info{
 		F_start = params.F_block_size * F_id;
 	}
 	
-	void print(){
-		cout<<b_id<<" "<<pos<<" "<<F_id<<" "<<b_size << " "<<b_start_F<<" "<<F_size<<" "<<F_start<<endl;
-	}
 	void reset(int b_id_, Params params){
 		// the block id of variable y
 		b_id = b_id_;
