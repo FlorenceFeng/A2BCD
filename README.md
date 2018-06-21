@@ -1,2 +1,3 @@
 # A2BCD
-yv_ATA is the code for numerical tests in paper.
+pq_shared is the code for NIPS paper.
+yv_ATA is the code for ICML paper.

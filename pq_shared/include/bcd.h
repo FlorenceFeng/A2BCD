@@ -122,7 +122,7 @@ class BCD{
 			gsl_spblas_dgemv (CblasTrans, 1., F_trans_block->at(info.F_id), &gsl_bg.vector, 0., &gsl_A_grad.vector);
 
 			// write to shared memory
-			pthread_mutex_lock(&writelock);
+			//pthread_mutex_lock(&writelock);
 			B_local[0] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 0) + params->alpha*params->beta*gsl_matrix_get(B, 1, 0);
 			B_local[1] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 1) + params->alpha*params->beta*gsl_matrix_get(B, 1, 1);
 			B_local[2] = (1-params->beta) * gsl_matrix_get(B, 0, 0) + params->beta*gsl_matrix_get(B, 1, 0);
@@ -142,13 +142,13 @@ class BCD{
 			gsl_matrix_set (B, 0, 1, B_local[1]);
 			gsl_matrix_set (B, 1, 0, B_local[2]);
 			gsl_matrix_set (B, 1, 1, B_local[3]);
-			pthread_mutex_unlock(&writelock);
+			//pthread_mutex_unlock(&writelock);
 		}
 		
 		void error_check(int iter){
 			
 			params->times.push_back(get_wall_time() - params->time);
-
+			
 			// recover y,v from p, q
 			gsl_blas_dscal (0, y);
 			gsl_blas_daxpy (gsl_matrix_get(B, 0, 0), p, y);
@@ -190,10 +190,10 @@ class BCD{
 				if(fabs(value-params->optimal) < params->tol)
 					params->stop = 1;
 				params->error.push_back(fabs(value-params->optimal));
-				params->time = get_wall_time();
 				//std::cout.precision(10);
 				cout<<fabs(value-params->optimal)<< endl;
 				params->check_thresh += params->check_step;
+				params->time = get_wall_time();
 			}
 		}
 };
