@@ -101,6 +101,8 @@ class BCD{
 			gsl_blas_daxpy (b21, &gsl_y_local.vector, v);
 			gsl_blas_daxpy (-params->stepsize[1], &grad_block.vector, &v_block.vector);
 			
+cout<<"y "<<gsl_blas_dnrm2(y)<<endl;
+cout<<"v "<<gsl_blas_dnrm2(v)<<endl;
 			// no acceleration update
 			//gsl_vector_set (y, pos, gsl_vector_get(y, pos) - 1/params->lip*gradient[pos]);
 			mutex_one.unlock();

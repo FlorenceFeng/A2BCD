@@ -3,7 +3,7 @@
 
 #include "util.h"
 #include "bcd.h"
-#include <atomic>
+#include <cstdatomic>
 using namespace std;
 
 extern std::atomic<int> iter;
@@ -16,7 +16,7 @@ void async_worker(int thread_id, BCD bcd, Params* params) {
 	while(!params->stop && iter < params->max_itrs){
     
 	// asynchronous
-	if(iter > params->thresh){
+	/*if(iter > params->thresh){
          pthread_barrier_wait(&barrier);
 
          if(thread_id == 0){
@@ -24,7 +24,7 @@ void async_worker(int thread_id, BCD bcd, Params* params) {
             params->thresh += params->check_step;
          }
          pthread_barrier_wait(&barrier);
-    }
+    }*/
          
 	bcd(iter);
     iter++;

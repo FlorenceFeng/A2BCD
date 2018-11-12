@@ -1,7 +1,7 @@
 #ifndef WORKER_H_
 #define WORKER_H_
 
-#include <atomic>
+#include <cstdatomic>
 #include <pthread.h>
 #include <iostream>
 #include "util.h"

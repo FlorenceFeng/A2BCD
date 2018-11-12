@@ -23,7 +23,7 @@ struct Params {
 	double tol;
 	int style;
 	int update_thresh;
-	int check_thresh;
+int check_thresh;
 	double time;
 	int block_num;
 	int F_block_num;
@@ -78,6 +78,9 @@ class Info{
 		F_start = params.F_block_size * F_id;
 	}
 	
+	void print(){
+		cout<<b_id<<" "<<pos<<" "<<F_id<<" "<<b_size << " "<<b_start_F<<" "<<F_size<<" "<<F_start<<endl;
+	}
 	void reset(int b_id_, Params params){
 		// the block id of variable y
 		b_id = b_id_;
@@ -86,14 +89,14 @@ class Info{
 		// the block id of F containing b_id
 		F_id = pos / params.F_block_size; 
 		// b_id's size
-		if((params.block_num == 1) ||  b_id < (params.block_num - 1))
+		if((params.block_num == 1) ||  b_id < (params.block_num - 1) || params.n % params.block_size == 0)
 			b_size = params.block_size;
 		else 
 			b_size = params.n % params.block_size;
-		// the starting positiong of block b_id in F_id
+		// the starting position of block b_id in F_id
 		b_start_F = pos % params.F_block_size;
 	    // F_id's size
-		if((params.F_block_num == 1) || F_id < (params.F_block_num - 1))
+		if(params.F_block_num == 1 || F_id < params.F_block_num - 1 || params.n % params.F_block_size == 0)
 			F_size = params.F_block_size;
 		else
 			F_size = params.n % params.F_block_size;

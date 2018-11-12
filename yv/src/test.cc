@@ -1,5 +1,5 @@
 #include <iostream>
-#include <atomic>
+#include <cstdatomic>
 #include <pthread.h>
 #include "worker.h"
 #include "bcd.h"
@@ -19,6 +19,7 @@ using namespace std;
 std::atomic<int> iter(1); // global iteration counter
 std::mutex my_mutex;
 pthread_barrier_t barrier; 
+
 int main(int argc, char *argv[]) {
 	
 	/* Step 1: Initialization */
@@ -31,7 +32,7 @@ int main(int argc, char *argv[]) {
 	FILE *fl = fopen("w8a/w8a_l.dat", "r");
 	gsl_vector_fscanf(fl, l); 
 	fclose(fl);
-	
+
 	gsl_spmatrix* F = gsl_spmatrix_alloc(params.m, params.n); // feature
 	FILE *fF = fopen("w8a/w8a_A", "r");   //MatrixMarket format
 	F = gsl_spmatrix_fscanf(fF);
@@ -82,11 +83,15 @@ int main(int argc, char *argv[]) {
 	//print_parameters(params);
 	
 	std::ofstream outFile1("error.txt");
-    for (const auto &e : params.error) outFile1 << e << "\n";
-	
+for(int i = 0; i < params.error.size(); i++){
+outFile1<<params.error[i]<<"\n";
+}
+    
 	std::ofstream outFile2("time.txt");
-    for (const auto &e : params.times) outFile2 << e << "\n";
-	
+    for(int i = 0; i < params.times.size(); i++){
+outFile2<<params.times[i]<<"\n";
+}
+
 	/* Step 4: Free memory */
 	gsl_vector_free(y);
 	gsl_vector_free(v);

@@ -12,8 +12,14 @@ void set_parameter(Params &params){
 	params.block_num  = params.n / params.block_size + bool(params.n % params.block_size);
 	params.F_block_num = params.n / params.F_block_size + bool(params.n % params.F_block_size);
 	params.sigma = 1./params.n;
-	double S_half = params.block_num * sqrt(params.lip);
-	params.alpha = 1./(1+(1+params.psi)*S_half*(1./sqrt(params.sigma)));
+double S_half = 0.;
+if(params.style!=2){
+	S_half = params.block_num * sqrt(params.lip);
+}
+else{
+S_half = params.block_num * sqrt(params.lip)/params.total_num_threads;}
+	
+params.alpha = 1./(1+(1+params.psi)*S_half*(1./sqrt(params.sigma)));
 	params.beta = 1-(1-params.psi)*sqrt(params.sigma)*(1./S_half);
 	if(params.style == 3){
 		params.alpha = 0;

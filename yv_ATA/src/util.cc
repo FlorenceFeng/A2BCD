@@ -20,7 +20,7 @@ void set_parameter(Params &params){
 	params.stepsize[0] = (params.alpha * (1./sqrt(params.sigma)) * (1./sqrt(params.lip))
 		                     + params.h * (1-params.alpha) / params.lip);
 	params.stepsize[1] = (1./sqrt(params.sigma)) * (1./sqrt(params.lip));
-	
+	cout<<params.stepsize[0]<<' '<<params.stepsize[1]<<endl;
 }
 
 void exit_with_help(string app_name, string data_type = "matrix_market", bool use_regularization = false) {

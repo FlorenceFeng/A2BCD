@@ -21,11 +21,14 @@ void async(int id, BCD bcd, Params* params) {
 	params->tol = 1e-10;
 	params->time = get_wall_time();
 	
-	while(iter < params->max_itrs && params->stop == 0){
+// style 1 is A2BCD, style 2 is sync, style 3 is async+noacc
+
+	while(params->stop == 0){
 		// asynchronous
 		if(params->style == 1 || params->style == 3){
-			bcd.worker(iter);
-			iter++;
+iter++;			
+bcd.worker(iter, id);
+			
 			// error check or rescale 
 			if(iter > params->update_thresh){
 				pthread_barrier_wait(&barrier);
@@ -40,7 +43,7 @@ void async(int id, BCD bcd, Params* params) {
 	
 		// synchronous
 		if(params->style == 2){
-			bcd.worker(iter + id);
+			bcd.worker(iter + id, id);
 			pthread_barrier_wait(&barrier);
     
 			if(id == 0){

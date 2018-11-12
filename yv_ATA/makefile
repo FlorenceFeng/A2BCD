@@ -18,9 +18,8 @@ DEPENDENCY := $(shell find $(BUILDDIR) -type f -name *.d 2>/dev/null)
 # app for PRS solving SOCP
 ARBCD := $(BINDIR)/ARBCD
 
-CFLAGS := -g -std=c++0x -MMD -w -I/c/msys64/mingw64/include/gsl
-
-LIB := -L/c/msys64/mingw64/lib -ansi -lgsl -lgslcblas -lm
+CFLAGS := -g -std=c++0x -MMD -w -I/home/wyin/gsl/include
+LIB := -L/home/wyin/gsl/lib -lgfortran -lpthread -ansi -lgsl -lgslcblas -lm
 INC := -I include
 
 all: $(ARBCD)
@@ -38,7 +37,7 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
 	@echo " $(CC) $(CFLAGS) $(INC) -c -o $@ $<"; $(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 run:
-	./$(ARBCD) -m 300 -n 14951 -nthread 4 -tol 1e-7 -max_itrs 16000 -check_step 1600 -block_size 100 -lambda 0.1 -psi 0 -optimal -0.055773974888657 -eigen 39474
+	./$(ARBCD) -m 300 -n 14951 -nthread 1 -tol 1e-9 -max_itrs 10 -check_step 1 -block_size 14951 -lambda 1 -psi 0 -optimal -0.07875005 -eigen 39474
 # clean up the executables and objective fils
 ##############################################
 clean:

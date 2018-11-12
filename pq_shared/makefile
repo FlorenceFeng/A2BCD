@@ -38,7 +38,7 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
 	@echo " $(CC) $(CFLAGS) $(INC) -c -o $@ $<"; $(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 run:
-	./$(ARBCD) -m 47236 -n 677399 -nthread 40 -style 2 -block_size 1000 -F_block_size 1000 -max_itrs 20000 -check_step 1000 -update_step 1000 -lambda 1 -psi 0 -optimal 0 -eigen 40000
+	./$(ARBCD) -m 47236 -n 677399 -nthread 40 -style 3 -block_size 1000 -F_block_size 1000 -max_itrs 100000 -check_step 200 -update_step 200 -lambda 0.001 -psi 0 -optimal -0.0491108027534 -eigen 20
 # clean up the executables and objective fils
 ##############################################
 clean:

@@ -85,10 +85,10 @@ class BCD{
 			p3 = p2/2.;
 	    }
 
-		void worker(int rd){
+		void worker(int rd, int thread_id){
 			
 			info.reset((int)gsl_vector_get(r, rd)%params->block_num, *params);
-				
+			
 			gsl_vector_view gsl_Ap_l = gsl_vector_view_array (&Ap_local[0], params->m);
 			gsl_vector_view gsl_Aq_l = gsl_vector_view_array (&Aq_local[0], params->m);
 			gsl_vector_view gsl_p = gsl_vector_subvector(p, info.F_start, info.F_size);
@@ -113,7 +113,7 @@ class BCD{
 			
 			// calculate block_grad of ridge regression
 			gsl_blas_dscal (B_local[0]*p1, &gsl_Ap_l.vector);
-			gsl_blas_daxpy (B_local[1]*p1, &gsl_Aq_l.vector, &gsl_Ap_l.vector);
+			gsl_blas_daxpy (B_local[1]*p1, &gsl_Aq_l.vector, &gsl_Ap_l.vector);			
 			gsl_spblas_dgemv (CblasNoTrans, 1, F_trans_block->at(info.F_id), &gsl_Ap_l.vector, 0.,  &gsl_bg.vector);
 			gsl_blas_daxpy (B_local[0]*p2, &gsl_p_l.vector, &gsl_bg.vector);
 			gsl_blas_daxpy (B_local[1]*p2, &gsl_q_l.vector, &gsl_bg.vector);
@@ -122,7 +122,8 @@ class BCD{
 			gsl_spblas_dgemv (CblasTrans, 1., F_trans_block->at(info.F_id), &gsl_bg.vector, 0., &gsl_A_grad.vector);
 
 			// write to shared memory
-			//pthread_mutex_lock(&writelock);
+			/*if(params->style==1 || params->style == 3){
+				pthread_mutex_lock(&writelock);}*/
 			B_local[0] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 0) + params->alpha*params->beta*gsl_matrix_get(B, 1, 0);
 			B_local[1] = (1-params->alpha * params->beta) * gsl_matrix_get(B, 0, 1) + params->alpha*params->beta*gsl_matrix_get(B, 1, 1);
 			B_local[2] = (1-params->beta) * gsl_matrix_get(B, 0, 0) + params->beta*gsl_matrix_get(B, 1, 0);
@@ -138,11 +139,24 @@ class BCD{
 			gsl_blas_daxpy (c1, &gsl_A_grad.vector, Ap);
 			gsl_blas_daxpy (c2, &gsl_A_grad.vector, Aq);
 			
-			gsl_matrix_set (B, 0, 0, B_local[0]);
-			gsl_matrix_set (B, 0, 1, B_local[1]);
-			gsl_matrix_set (B, 1, 0, B_local[2]);
-			gsl_matrix_set (B, 1, 1, B_local[3]);
 			//pthread_mutex_unlock(&writelock);
+
+			if(params->style == 2 && thread_id == 0){
+				gsl_matrix_set (B, 0, 0, B_local[0]);
+				gsl_matrix_set (B, 0, 1, B_local[1]);
+				gsl_matrix_set (B, 1, 0, B_local[2]);
+				gsl_matrix_set (B, 1, 1, B_local[3]);
+			}
+
+			if(params->style == 1){
+				gsl_matrix_set (B, 0, 0, B_local[0]);
+				gsl_matrix_set (B, 0, 1, B_local[1]);
+				gsl_matrix_set (B, 1, 0, B_local[2]);
+				gsl_matrix_set (B, 1, 1, B_local[3]);
+			}
+
+			/*if(params->style == 1 || params->style == 3)
+				pthread_mutex_unlock(&writelock);*/
 		}
 		
 		void error_check(int iter){
@@ -187,10 +201,11 @@ class BCD{
 				gsl_spblas_dgemv (CblasNoTrans, 1., F, x, 0., temp);
 				double value = 0.5 *p1*pow(gsl_blas_dnrm2(temp),2)+ p3 * pow(gsl_blas_dnrm2 (x),2) + p3 * dot;
 				
-				if(fabs(value-params->optimal) < params->tol)
-					params->stop = 1;
+				if(fabs(value-params->optimal) < params->tol || iter > params->max_itrs){
+
+					params->stop = 1;}
 				params->error.push_back(fabs(value-params->optimal));
-				//std::cout.precision(10);
+				std::cout.precision(15);
 				cout<<fabs(value-params->optimal)<< endl;
 				params->check_thresh += params->check_step;
 				params->time = get_wall_time();
