@@ -6,37 +6,31 @@
 using namespace std;
 
 void set_parameter(Params &params){
-	//params.lips.resize(params.block_num, params.lip);
-	params.stepsize.resize(2, 0);
-	//params.block.resize(params.block_num+1, 0);
+	params.update = false;
+	// Lipshitz for gradient
+	params.lip = 1./params.n + (1./(params.lambda*params.n*params.n))*params.eigen;
+	params.stepsize.resize(2);
+	params.block_num  = params.n / params.block_size + bool(params.n % params.block_size);
+	params.F_block_num = params.n / params.F_block_size + bool(params.n % params.F_block_size);
 	params.sigma = 1./params.n;
 	
-	double S_half = params.n * sqrt(params.lip);
-	/*for (int i = 0; i < params.n; i++){
-		S_half += sqrt(params.lips[i]);
-	}*/
+	double S_half = 0.;
+	if(params.style!=2)
+		S_half = params.block_num * sqrt(params.lip);
+	else
+		S_half = params.block_num * sqrt(params.lip)/params.total_num_threads;
 	
 	params.alpha = 1./(1+(1+params.psi)*S_half*(1./sqrt(params.sigma)));
 	params.beta = 1-(1-params.psi)*sqrt(params.sigma)*(1./S_half);
+	if(params.style == 3){
+		params.alpha = 0;
+		params.beta = 1;
+	}
 	params.h = 1-0.5*sqrt(params.sigma)/sqrt(params.lip)*params.psi;
-	//params.beta = 1-sqrt(params.sigma)/(1+params.psi)*(1./S_half);
-	//params.h = 1./(1+0.5*sqrt(params.sigma)/sqrt(params.lip)*params.psi);
-
-	// set probability distribution
-	//params.prob.resize(params.block_num, 1./params.block_num);
-	
 	// set stepsize
-	/*for(int i = 0; i < params.block_num; i++){
-		params.stepsize[2*i] = (params.alpha * (1./sqrt(params.sigma)) * (1./sqrt(params.lips[i]))
-		                     + params.h * (1-params.alpha) / params.lips[i]);
-		params.stepsize[2*i+1] = (1./sqrt(params.sigma)) * (1./sqrt(params.lips[i]));
-	}*/
 	params.stepsize[0] = (params.alpha * (1./sqrt(params.sigma)) * (1./sqrt(params.lip))
-		                     + params.h * (1-params.alpha) / params.lip);
+		                 + params.h * (1-params.alpha) / params.lip);
 	params.stepsize[1] = (1./sqrt(params.sigma)) * (1./sqrt(params.lip));
-
-	params.block_num  = params.n / params.block_size + bool(params.n % params.block_size);
-	params.F_block_size = params.n / params.F_block_num;
 }
 
 void exit_with_help(string app_name, string data_type = "matrix_market", bool use_regularization = false) {
@@ -86,7 +80,11 @@ void print_parameters(Params& para) {
   cout << left << "psi: " << right << para.psi << endl;
   cout.width(28);  
   cout << left << "lambda: " << right << para.lambda << endl;
-  cout.width(28);  
+  cout.width(28); 
+  cout << left << "stepsize_1: " << right << para.stepsize[0] << endl;
+  cout.width(28); 
+  cout << left << "stepsize_2: " << right << para.stepsize[1] << endl;
+  cout.width(28);   
   
   cout << "---------------------------------" << endl;  
 }
@@ -112,20 +110,26 @@ void parse_input_argv(Params* para, int argc, char *argv[]){
 		else if (std::string(argv[i - 1]) == "-m") {
 			para->m = atoi(argv[i]);
 		}
+		else if (std::string(argv[i - 1]) == "-style") {
+			para->style = atoi(argv[i]);
+		}
 		else if (std::string(argv[i - 1]) == "-max_itrs") {
 			para->max_itrs = atoi(argv[i]);
 		}
 		else if (std::string(argv[i - 1]) == "-check_step") {
 			para->check_step = atoi(argv[i]);
 		}
+    else if (std::string(argv[i - 1]) == "-update_step") {
+      para->update_step = atoi(argv[i]);
+    }
 		else if (std::string(argv[i - 1]) == "-nthread") {
 			para->total_num_threads = atoi(argv[i]);
 		}
 		else if (std::string(argv[i - 1]) == "-block_size"){
 			para->block_size = atoi(argv[i]);
 		}
-		else if (std::string(argv[i - 1]) == "-F_block_num"){
-			para->F_block_num = atoi(argv[i]);
+		else if (std::string(argv[i - 1]) == "-F_block_size"){
+			para->F_block_size = atoi(argv[i]);
 		}
 		else if (std::string(argv[i - 1]) == "-lambda"){
 			para->lambda = atof(argv[i]);
@@ -133,8 +137,8 @@ void parse_input_argv(Params* para, int argc, char *argv[]){
 		else if (std::string(argv[i - 1]) == "-optimal"){
 			para->optimal = atof(argv[i]);
 		}
-		else if (std::string(argv[i - 1]) == "-lip"){
-			para->lip = atof(argv[i]);
+		else if (std::string(argv[i - 1]) == "-eigen"){
+			para->eigen = atof(argv[i]);
 		}
 		else if (std::string(argv[i - 1]) == "-psi"){
 			para->psi = atof(argv[i]);

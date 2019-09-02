@@ -47,8 +47,8 @@ class BCD{
 		gsl_vector* Ap;
 		gsl_vector* Aq;
 		gsl_matrix* B; 
-		gsl_spmatrix* F;
-		std::vector<gsl_spmatrix*> *F_trans_block;
+		gsl_spmatrix* F; // F = feature matrix
+		std::vector<gsl_spmatrix*> *F_trans_block; // blocks of F'
 		gsl_vector* l;
 		gsl_vector* r;
 		
